@@ -4,7 +4,7 @@ import firebaseConfig from "../firebase-applet-config.json";
 import { DirectoryCard, UnitColumn } from "./types";
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 export enum OperationType {
   CREATE = 'create',
