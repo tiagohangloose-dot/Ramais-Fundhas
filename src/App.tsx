@@ -400,40 +400,62 @@ export default function App() {
     }, 2500);
   };
 
+  const removeAccents = (str: string): string => {
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  };
+
   // Search logic helper: filters items or returns boolean
   const highlightMatch = (text: string, search: string) => {
     if (!search.trim()) return <span>{text}</span>;
     
-    const parts = text.split(new RegExp(`(${search.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")})`, "gi"));
-    return (
-      <span>
-        {parts.map((part, index) => 
-          part.toLowerCase() === search.toLowerCase() ? (
-            <mark key={index} className="bg-amber-100 text-amber-950 font-medium px-0.5 rounded-sm">
-              {part}
-            </mark>
-          ) : (
-            part
-          )
-        )}
-      </span>
-    );
+    const normalizedText = removeAccents(text).toLowerCase();
+    const normalizedSearch = removeAccents(search).toLowerCase();
+    
+    if (!normalizedText.includes(normalizedSearch)) {
+      return <span>{text}</span>;
+    }
+    
+    const parts: React.ReactNode[] = [];
+    let currentIndex = 0;
+    
+    while (currentIndex < text.length) {
+      const matchIndex = normalizedText.indexOf(normalizedSearch, currentIndex);
+      if (matchIndex === -1) {
+        parts.push(text.substring(currentIndex));
+        break;
+      }
+      
+      if (matchIndex > currentIndex) {
+        parts.push(text.substring(currentIndex, matchIndex));
+      }
+      
+      const originalMatchedText = text.substring(matchIndex, matchIndex + normalizedSearch.length);
+      parts.push(
+        <mark key={matchIndex} className="bg-amber-100 text-amber-950 font-medium px-0.5 rounded-sm">
+          {originalMatchedText}
+        </mark>
+      );
+      
+      currentIndex = matchIndex + normalizedSearch.length;
+    }
+    
+    return <span>{parts}</span>;
   };
 
   // Check if a card matches search
   const isCardMatchingSearch = (card: DirectoryCard, search: string) => {
     if (!search.trim()) return true;
-    const term = search.toLowerCase();
+    const term = removeAccents(search).toLowerCase();
     
     // Check card title
-    if (card.title.toLowerCase().includes(term)) return true;
+    if (removeAccents(card.title).toLowerCase().includes(term)) return true;
     
     // Check items
     return card.items.some(
       item => 
-        (item.name && item.name.toLowerCase().includes(term)) ||
-        (item.role && item.role.toLowerCase().includes(term)) ||
-        (item.extension && item.extension.toLowerCase().includes(term))
+        (item.name && removeAccents(item.name).toLowerCase().includes(term)) ||
+        (item.role && removeAccents(item.role).toLowerCase().includes(term)) ||
+        (item.extension && removeAccents(item.extension).toLowerCase().includes(term))
     );
   };
 
@@ -962,7 +984,7 @@ export default function App() {
                 : "Busca completa de ramais, diretorias, divisões e unidades externas sob gestão da Fundhas."}
             </p>
             {activeMainTab !== "cephas" && (
-              <p className="text-xs text-slate-500 mt-1.5 font-light leading-relaxed">
+              <p className="text-sm text-slate-600 mt-1.5 font-medium leading-relaxed">
                 Rua Santarém, 560 - Parque Industrial | São José dos Campos, SP - CEP 12235-550 | Telefone: (12) 3932-0533
               </p>
             )}
@@ -1200,11 +1222,11 @@ export default function App() {
                 if (!searchQuery.trim()) return true;
                 if (item.isSubheading) return true; // always show section headers within visual container
                 
-                const term = searchQuery.toLowerCase();
+                const term = removeAccents(searchQuery).toLowerCase();
                 return (
-                  (item.name && item.name.toLowerCase().includes(term)) ||
-                  (item.role && item.role.toLowerCase().includes(term)) ||
-                  (item.extension && item.extension.toLowerCase().includes(term))
+                  (item.name && removeAccents(item.name).toLowerCase().includes(term)) ||
+                  (item.role && removeAccents(item.role).toLowerCase().includes(term)) ||
+                  (item.extension && removeAccents(item.extension).toLowerCase().includes(term))
                 );
               });
 
@@ -1535,14 +1557,14 @@ export default function App() {
                 const filteredSections = col.sections.map(sec => {
                   const filteredGroups = sec.groups.filter(grp => {
                     if (!searchQuery.trim()) return true;
-                    const query = searchQuery.toLowerCase();
-                    if (grp.name.toLowerCase().includes(query)) return true;
-                    if (grp.directExtension && grp.directExtension.toLowerCase().includes(query)) return true;
+                    const query = removeAccents(searchQuery).toLowerCase();
+                    if (removeAccents(grp.name).toLowerCase().includes(query)) return true;
+                    if (grp.directExtension && removeAccents(grp.directExtension).toLowerCase().includes(query)) return true;
                     return grp.items.some(
                       item => 
-                        item.name.toLowerCase().includes(query) ||
-                        (item.role && item.role.toLowerCase().includes(query)) ||
-                        item.extension.toLowerCase().includes(query)
+                        removeAccents(item.name).toLowerCase().includes(query) ||
+                        (item.role && removeAccents(item.role).toLowerCase().includes(query)) ||
+                        removeAccents(item.extension).toLowerCase().includes(query)
                     );
                   });
                   return { ...sec, groups: filteredGroups };
