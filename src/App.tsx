@@ -41,6 +41,62 @@ function DynamicIcon({ name, className = "h-5 w-5" }: { name: string; className?
   return <Icons.Phone className={className} />;
 }
 
+// Helper to parse and format phone extensions/numbers for display & dialing
+export function getPhoneDisplayAndDial(ext: string, isCephas: boolean) {
+  if (!ext) return [];
+
+  const parts = ext.split("/").map(p => p.trim());
+
+  if (isCephas) {
+    // If it's Cephas, and contains a slash with multiple components, look for a full phone-like number
+    const fullNumberPart = parts.find(p => p.replace(/\D/g, "").length >= 7);
+    if (fullNumberPart) {
+      const dialDigits = fullNumberPart.replace(/[^0-9+]/g, "");
+      return [{
+        display: fullNumberPart,
+        dialUrl: `tel:${dialDigits}`,
+        raw: fullNumberPart
+      }];
+    }
+
+    // Otherwise, convert any 3-digit number to standard complete format (3932-0xxx)
+    return parts.map(part => {
+      const digits = part.replace(/\D/g, "");
+      if (digits.length === 3) {
+        return {
+          display: `3932-0${digits}`,
+          dialUrl: `tel:39320${digits}`,
+          raw: `3932-0${digits}`
+        };
+      }
+      const dialDigits = part.replace(/[^0-9+]/g, "");
+      return {
+        display: part,
+        dialUrl: `tel:${dialDigits}`,
+        raw: part
+      };
+    });
+  }
+
+  // Non-Cephas (default Fundhas)
+  return parts.map(part => {
+    const digits = part.replace(/\D/g, "");
+    if (digits.length === 3) {
+      return {
+        display: part, // Keep it short, e.g., "583"
+        dialUrl: `tel:39320${digits}`, // But dials full number
+        raw: `3932-0${digits}` // when copied, copies full number
+      };
+    }
+    const dialDigits = part.replace(/[^0-9+]/g, "");
+    return {
+      display: part,
+      dialUrl: `tel:${dialDigits}`,
+      raw: part
+    };
+  });
+}
+
 export default function App() {
   // State for high-density directory cards and bottom units
   const [cards, setCards] = useState<DirectoryCard[]>([]);
@@ -744,14 +800,14 @@ export default function App() {
                   </div>
 
                   {/* Card 5 */}
-                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-5 py-4 text-center min-w-[140px] shadow-md hover:bg-red-500/20 transition-all duration-200 flex flex-col justify-between h-[84px] cursor-pointer" onClick={() => triggerCopyToast("153")}>
+                  <a href="tel:153" className="bg-red-500/10 border border-red-500/30 rounded-xl px-5 py-4 text-center min-w-[140px] shadow-md hover:bg-red-500/20 transition-all duration-200 flex flex-col justify-between h-[84px] cursor-pointer" onClick={() => triggerCopyToast("153")}>
                     <span className="text-[9px] font-extrabold text-red-300 uppercase tracking-widest block flex items-center justify-center gap-1">
                       🚨 CSI EMERGÊNCIA
                     </span>
                     <span className="text-red-400 text-lg font-black tracking-tight block mt-1.5 font-mono animate-pulse">
                       153
                     </span>
-                  </div>
+                  </a>
                 </div>
               </div>
             </div>
@@ -1301,43 +1357,27 @@ export default function App() {
                               ) : (
                                 (() => {
                                   if (!item.extension) return null;
-                                  
-                                  if (item.extension.includes("/")) {
-                                    const numbers = item.extension.split("/").map(num => num.trim());
-                                    return (
-                                      <div className="flex flex-wrap gap-1 justify-end max-w-[140px] md:max-w-[200px] lg:max-w-[240px]">
-                                        {numbers.map((number, nIdx) => (
-                                          <button
-                                            key={nIdx}
-                                            onClick={() => triggerCopyToast(number)}
-                                            className="group/btn relative px-1.5 py-1 bg-slate-50 hover:bg-blue-50/80 text-blue-700 rounded border border-slate-100 hover:border-blue-200 transition-all font-mono font-bold text-[10px] md:text-xs tracking-tight flex items-center gap-1 cursor-pointer shrink-0"
-                                            title="Clique para copiar"
-                                          >
-                                            <Phone className="h-2.5 w-2.5 text-blue-400 group-hover/btn:text-[#0059bb] shrink-0" />
-                                            <span className="break-all">{highlightMatch(number, searchQuery)}</span>
-                                            <span className="opacity-0 group-hover/btn:opacity-100 transition-opacity ml-0.5 duration-150 shrink-0">
-                                              <Copy className="h-2.5 w-2.5 text-slate-400" />
-                                            </span>
-                                          </button>
-                                        ))}
-                                      </div>
-                                    );
-                                  }
+                                  const phones = getPhoneDisplayAndDial(item.extension, activeMainTab === "cephas");
+                                  if (!phones || phones.length === 0) return null;
 
                                   return (
-                                    <button
-                                      onClick={() => triggerCopyToast(item.extension || "")}
-                                      className="group/btn relative px-1.5 py-1 bg-slate-50 hover:bg-blue-50/80 text-blue-700 rounded border border-slate-100 hover:border-blue-200 transition-all font-mono font-bold text-[10px] md:text-xs tracking-tight flex items-center gap-1 cursor-pointer max-w-[130px] md:max-w-[160px] break-words whitespace-normal text-right justify-end"
-                                      title="Clique para copiar ramal"
-                                    >
-                                      <Phone className="h-2.5 w-2.5 text-blue-400 group-hover/btn:text-[#0059bb] shrink-0" />
-                                      <span className="break-all">{highlightMatch(item.extension || "", searchQuery)}</span>
-                                      
-                                      {/* Little clipboard icon that shows up on hover */}
-                                      <span className="opacity-0 group-hover/btn:opacity-100 transition-opacity ml-0.5 duration-150 shrink-0">
-                                        <Copy className="h-2.5 w-2.5 text-slate-400" />
-                                      </span>
-                                    </button>
+                                    <div className="flex flex-wrap gap-1 justify-end max-w-[140px] md:max-w-[200px] lg:max-w-[240px]">
+                                      {phones.map((phone, pIdx) => (
+                                        <a
+                                          key={pIdx}
+                                          href={phone.dialUrl}
+                                          onClick={() => triggerCopyToast(phone.raw)}
+                                          className="group/btn relative px-1.5 py-1 bg-slate-50 hover:bg-blue-50/80 text-blue-700 rounded border border-slate-100 hover:border-blue-200 transition-all font-mono font-bold text-[10px] md:text-xs tracking-tight flex items-center gap-1 cursor-pointer shrink-0"
+                                          title="Pressione para ligar ou clique para copiar"
+                                        >
+                                          <Phone className="h-2.5 w-2.5 text-blue-400 group-hover/btn:text-[#0059bb] shrink-0" />
+                                          <span className="break-all">{highlightMatch(phone.display, searchQuery)}</span>
+                                          <span className="opacity-0 group-hover/btn:opacity-100 transition-opacity ml-0.5 duration-150 shrink-0">
+                                            <Copy className="h-2.5 w-2.5 text-slate-400" />
+                                          </span>
+                                        </a>
+                                      ))}
+                                    </div>
                                   );
                                 })()
                               )}
@@ -1459,12 +1499,26 @@ export default function App() {
                                           className="text-xs font-bold text-[#0059bb] bg-white border border-slate-200 rounded px-1 w-20 text-right focus:ring-1 focus:ring-red-400 focus:outline-none"
                                         />
                                       ) : (
-                                        <button
-                                          onClick={() => triggerCopyToast(grp.directExtension || "")}
-                                          className="px-2 py-0.5 bg-white hover:bg-blue-50 text-[#0059bb] rounded border border-slate-100 hover:border-blue-200 transition-all font-mono font-bold text-xs cursor-pointer"
-                                        >
-                                          {grp.directExtension}
-                                        </button>
+                                        (() => {
+                                          const phones = getPhoneDisplayAndDial(grp.directExtension || "", false);
+                                          if (!phones || phones.length === 0) return null;
+                                          return (
+                                            <div className="flex gap-1">
+                                              {phones.map((phone, pIdx) => (
+                                                <a
+                                                  key={pIdx}
+                                                  href={phone.dialUrl}
+                                                  onClick={() => triggerCopyToast(phone.raw)}
+                                                  className="px-2 py-0.5 bg-white hover:bg-blue-50 text-[#0059bb] rounded border border-slate-200 hover:border-blue-300 transition-all font-mono font-bold text-xs cursor-pointer flex items-center gap-1"
+                                                  title="Pressione para ligar ou clique para copiar"
+                                                >
+                                                  <Phone className="h-2.5 w-2.5 text-blue-400 shrink-0" />
+                                                  <span>{highlightMatch(phone.display, searchQuery)}</span>
+                                                </a>
+                                              ))}
+                                            </div>
+                                          );
+                                        })()
                                       )}
                                     </div>
                                   )}
@@ -1519,12 +1573,26 @@ export default function App() {
                                               </button>
                                             </div>
                                           ) : (
-                                            <button
-                                              onClick={() => triggerCopyToast(item.extension)}
-                                              className="px-1.5 py-0.5 bg-white hover:bg-blue-50/80 text-blue-700 font-mono font-bold hover:border-blue-200 border border-slate-200/50 rounded text-[10px] tracking-tight cursor-pointer"
-                                            >
-                                              {highlightMatch(item.extension, searchQuery)}
-                                            </button>
+                                            (() => {
+                                              const phones = getPhoneDisplayAndDial(item.extension, false);
+                                              if (!phones || phones.length === 0) return null;
+                                              return (
+                                                <div className="flex gap-1 justify-end">
+                                                  {phones.map((phone, pIdx) => (
+                                                    <a
+                                                      key={pIdx}
+                                                      href={phone.dialUrl}
+                                                      onClick={() => triggerCopyToast(phone.raw)}
+                                                      className="px-1.5 py-0.5 bg-white hover:bg-blue-50/80 text-blue-700 font-mono font-bold hover:border-blue-300 border border-slate-200 rounded text-[10px] tracking-tight cursor-pointer flex items-center gap-1"
+                                                      title="Pressione para ligar ou clique para copiar"
+                                                    >
+                                                      <Phone className="h-2 w-2 text-blue-400 shrink-0" />
+                                                      <span>{highlightMatch(phone.display, searchQuery)}</span>
+                                                    </a>
+                                                  ))}
+                                                </div>
+                                              );
+                                            })()
                                           )}
                                         </div>
                                       </div>
