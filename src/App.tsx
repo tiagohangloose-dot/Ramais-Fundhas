@@ -961,6 +961,11 @@ export default function App() {
                 ? "Rua Tsunessaburu Makiguti, 399 - Floradas de S. José | CEP 12230-084 - SJC" 
                 : "Busca completa de ramais, diretorias, divisões e unidades externas sob gestão da Fundhas."}
             </p>
+            {activeMainTab !== "cephas" && (
+              <p className="text-xs text-slate-500 mt-1.5 font-light leading-relaxed">
+                Rua Santarém, 560 - Parque Industrial | São José dos Campos, SP - CEP 12235-550 | Telefone: (12) 3932-0533
+              </p>
+            )}
           </div>
 
           {/* Interactive Live Search Box */}
@@ -1724,11 +1729,9 @@ export default function App() {
         <div className="max-w-[1280px] mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div>
             <p className="font-medium text-slate-700">© 2026 Fundhas - Fundação Hélio Augusto de Souza.</p>
-            <p className="font-light mt-0.5">Todos os direitos reservados. Desenvolvimento e Transparência Corporativa.</p>
+            <p className="font-light mt-0.5">Todos os direitos reservados.</p>
           </div>
           <div className="flex gap-4 font-semibold text-slate-500">
-            <button onClick={() => setShowHelp(true)} className="hover:text-[#0059bb] transition-all cursor-pointer">Como Usar</button>
-            <span className="text-slate-300">|</span>
             <a href="https://fundhas.org.br/" target="_blank" rel="noopener noreferrer" className="hover:text-[#0059bb] transition-all flex items-center gap-1">
               Portal Oficial <Icons.ExternalLink className="h-3 w-3" />
             </a>
