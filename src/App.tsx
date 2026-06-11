@@ -105,9 +105,9 @@ export function getPhoneDisplayAndDial(ext: string, isCephas: boolean) {
 
 export default function App() {
   // State for high-density directory cards and bottom units
-  const [cards, setCards] = useState<DirectoryCard[]>([]);
-  const [unitColumns, setUnitColumns] = useState<UnitColumn[]>([]);
-  const [cephasCards, setCephasCards] = useState<DirectoryCard[]>([]);
+  const [cards, setCards] = useState<DirectoryCard[]>(initialDirectoryCards);
+  const [unitColumns, setUnitColumns] = useState<UnitColumn[]>(initialUnitColumns);
+  const [cephasCards, setCephasCards] = useState<DirectoryCard[]>(initialCephasDirectoryCards);
   const [activeMainTab, setActiveMainTab] = useState<"fundhas" | "cephas">("fundhas");
   const [selectedCephasCategory, setSelectedCephasCategory] = useState<string>("todos");
   const [systemPassword, setSystemPassword] = useState<string>("1234");
