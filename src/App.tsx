@@ -54,6 +54,126 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("todos");
   
+  // Drag and drop state
+  const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
+  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
+
+  // drag-and-drop logic
+  const handleDragStart = (e: React.DragEvent, itemId: string, cardId: string) => {
+    e.dataTransfer.setData("text/plain", JSON.stringify({ itemId, cardId }));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragEnd = () => {
+    setDragOverItemId(null);
+    setDragOverCardId(null);
+  };
+
+  const handleDragOverItem = (e: React.DragEvent, itemId: string) => {
+    e.preventDefault();
+    if (dragOverItemId !== itemId) {
+      setDragOverItemId(itemId);
+    }
+  };
+
+  const handleDragLeaveItem = (itemId: string) => {
+    if (dragOverItemId === itemId) {
+      setDragOverItemId(null);
+    }
+  };
+
+  const handleDragOverCard = (e: React.DragEvent, cardId: string) => {
+    e.preventDefault();
+    if (dragOverCardId !== cardId) {
+      setDragOverCardId(cardId);
+    }
+  };
+
+  const handleDragLeaveCard = (cardId: string) => {
+    if (dragOverCardId === cardId) {
+      setDragOverCardId(null);
+    }
+  };
+
+  const handleDropOnItem = (e: React.DragEvent, targetItemId: string, targetCardId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverItemId(null);
+    setDragOverCardId(null);
+    try {
+      const dataStr = e.dataTransfer.getData("text/plain");
+      if (!dataStr) return;
+      const { itemId, cardId: sourceCardId } = JSON.parse(dataStr);
+      
+      if (itemId === targetItemId) return;
+      moveItem(itemId, sourceCardId, targetCardId, targetItemId);
+    } catch (err) {
+      console.error("Drop item error:", err);
+    }
+  };
+
+  const handleDropOnCard = (e: React.DragEvent, targetCardId: string) => {
+    e.preventDefault();
+    setDragOverItemId(null);
+    setDragOverCardId(null);
+    try {
+      const dataStr = e.dataTransfer.getData("text/plain");
+      if (!dataStr) return;
+      const { itemId, cardId: sourceCardId } = JSON.parse(dataStr);
+      
+      moveItem(itemId, sourceCardId, targetCardId);
+    } catch (err) {
+      console.error("Drop card error:", err);
+    }
+  };
+
+  const moveItem = (
+    itemId: string,
+    sourceCardId: string,
+    targetCardId: string,
+    targetItemId?: string
+  ) => {
+    const isCephas = activeMainTab === "cephas";
+    const currentCards = isCephas ? cephasCards : cards;
+
+    const sourceCard = currentCards.find(c => c.id === sourceCardId);
+    if (!sourceCard) return;
+
+    const itemToMove = sourceCard.items.find(item => item.id === itemId);
+    if (!itemToMove) return;
+
+    const updatedCards = currentCards.map(c => {
+      let finalItems = c.items;
+      if (c.id === sourceCardId) {
+        finalItems = finalItems.filter(item => item.id !== itemId);
+      }
+
+      if (c.id === targetCardId) {
+        if (targetItemId) {
+          const insertIdx = finalItems.findIndex(item => item.id === targetItemId);
+          if (insertIdx !== -1) {
+            const nextItems = [...finalItems];
+            nextItems.splice(insertIdx, 0, itemToMove);
+            return { ...c, items: nextItems };
+          }
+        }
+        return { ...c, items: [...finalItems, itemToMove] };
+      }
+
+      if (c.id === sourceCardId) {
+        return { ...c, items: finalItems };
+      }
+
+      return c;
+    });
+
+    if (isCephas) {
+      handleSaveCephasChanges(updatedCards);
+    } else {
+      handleSaveChanges(updatedCards, unitColumns);
+    }
+  };
+  
   // UI states
   const [copiedText, setCopiedText] = useState<string | null>(null);
   const [showToast, setShowToast] = useState<boolean>(false);
@@ -162,71 +282,15 @@ export default function App() {
     }, 4500);
   };
 
-  // Helper to parse strings the user wants to dial, adding prefix if appropriate
-  const getDialableNumber = (text: string): string => {
-    // Keep only numbers
-    const digits = text.replace(/\D/g, "");
-    
-    // If it's the short-code emergency line "153"
-    if (digits === "153") {
-      return "153";
-    }
-
-    // 3-digit internal extensions like "583" -> dials 39320583
-    if (digits.length === 3) {
-      return `39320${digits}`;
-    }
-
-    // 4-digit internal extensions if they ever occur
-    if (digits.length === 4) {
-      return `3932${digits}`;
-    }
-
-    // Otherwise dial standard number digits directly
-    return digits;
-  };
-
-  // Toast notification specifically for copies and mobile phone dialing
+  // Toast notification specifically for copies
   const triggerCopyToast = (text: string) => {
-    // 1. Clean number & copy to clipboard
-    try {
-      navigator.clipboard.writeText(text);
-    } catch (e) {
-      console.warn("Failed to copy to clipboard", e);
-    }
+    navigator.clipboard.writeText(text);
     setCopiedText(text);
-
-    // 2. Identify clean digits and dial number
-    const digits = text.replace(/\D/g, "");
-    const dialable = getDialableNumber(text);
-
-    // 3. Build descriptive toast message
-    let toastMsg = "";
-    if (digits === "153") {
-      toastMsg = "Iniciando ligação para Emergência CSI (153)...";
-    } else if (digits.length === 3) {
-      toastMsg = `Ligando para: 3932-0${digits} (Ramal ${digits} copiado!)`;
-    } else if (dialable && dialable.length > 0) {
-      // Format number elegantly for display in toast if it looks like an 8-digit number
-      let displayDial = text;
-      if (digits.length === 8 && !text.includes("-")) {
-        displayDial = `${digits.substring(0, 4)}-${digits.substring(4)}`;
-      }
-      toastMsg = `Ligando para: ${displayDial} (Número copiado!)`;
-    } else {
-      toastMsg = `Copiado para a área de transferência: ${text}`;
-    }
-
-    setToastMessage(toastMsg);
+    setToastMessage(`Ramal ${text} copiado para a área de transferência!`);
     setShowToast(true);
     setTimeout(() => {
       setShowToast(false);
-    }, 3000);
-
-    // 4. Trigger dialer instantly
-    if (dialable && dialable.length > 0) {
-      window.location.href = `tel:${dialable}`;
-    }
+    }, 2500);
   };
 
   // Search logic helper: filters items or returns boolean
@@ -929,7 +993,7 @@ export default function App() {
               <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse"></span>
               <div>
                 <p className="text-sm font-bold text-red-900">VOCÊ ESTÁ NO MODO EDIÇÃO</p>
-                <p className="text-xs text-red-700">Edite nomes, ramais e subtítulos diretamente na página. Você também pode acrescentar ou excluir elementos.</p>
+                <p className="text-xs text-red-700">Edite nomes, ramais e subtítulos diretamente na página. Para reordenar ou mover pessoas e subtítulos entre setores, basta clicar e arrastar segurando o ícone de alça (grip) ao lado de cada nome!</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -996,10 +1060,17 @@ export default function App() {
               return (
                 <div
                   key={card.id}
-                  className={`bg-white border border-[#DEE2E6] rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative group print-card ${
+                  className={`bg-white border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative group print-card ${
                     card.id === "telefones-externos" ? "md:col-span-2 lg:col-span-2 xl:col-span-2" : ""
+                  } ${
+                    isEditMode && dragOverCardId === card.id 
+                      ? "border-[#0059bb] bg-[#0059bb]/5 ring-2 ring-[#0059bb]/20 scale-[1.01]" 
+                      : "border-[#DEE2E6]"
                   }`}
                   id={`card-${card.id}`}
+                  onDragOver={isEditMode ? (e) => handleDragOverCard(e, card.id) : undefined}
+                  onDragLeave={isEditMode ? () => handleDragLeaveCard(card.id) : undefined}
+                  onDrop={isEditMode ? (e) => handleDropOnCard(e, card.id) : undefined}
                 >
                   <div>
                     {/* Card Head / Department title */}
@@ -1022,7 +1093,7 @@ export default function App() {
                                 handleSaveChanges(updated, unitColumns);
                               }
                             }}
-                            className="font-extrabold text-[#001937] text-sm tracking-tight border-b border-red-200 focus:outline-none focus:border-red-600 bg-red-50/50 px-1 rounded"
+                            className="font-extrabold text-[#001937] text-sm tracking-tight border-b border-red-200 focus:outline-none focus:border-red-600 bg-red-50/55 p-0.5 rounded w-full"
                           />
                         ) : (
                           <h3 className="font-extrabold text-[#001937] text-xs md:text-sm tracking-tight leading-snug">
@@ -1045,7 +1116,7 @@ export default function App() {
                                   triggerNotification("success", "Setor removido com sucesso!");
                                 }}
                                 className="px-1.5 py-0.5 bg-red-650 hover:bg-red-750 text-white rounded text-[10px] font-black transition-all cursor-pointer"
-                                title="Confirmar exclusão definitiva do setor"
+                                title="Confirmar exclusão definitiva do sector"
                               >
                                 Sim
                               </button>
@@ -1083,9 +1154,21 @@ export default function App() {
                         // Handle Subheadings
                         if (item.isSubheading) {
                           return (
-                            <div key={item.id} className="pt-3 pb-1">
+                            <div 
+                              key={item.id} 
+                              className={`pt-3 pb-1 transition-all duration-150 ${
+                                isEditMode && dragOverItemId === item.id ? "border-t-2 border-dashed border-[#0059bb] pt-5" : ""
+                              }`}
+                              draggable={isEditMode}
+                              onDragStart={isEditMode ? (e) => handleDragStart(e, item.id, card.id) : undefined}
+                              onDragEnd={isEditMode ? handleDragEnd : undefined}
+                              onDragOver={isEditMode ? (e) => handleDragOverItem(e, item.id) : undefined}
+                              onDragLeave={isEditMode ? () => handleDragLeaveItem(item.id) : undefined}
+                              onDrop={isEditMode ? (e) => handleDropOnItem(e, item.id, card.id) : undefined}
+                            >
                               {isEditMode ? (
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 bg-red-50/10 p-1 border border-dashed border-red-250/30 rounded-lg">
+                                  <Icons.GripVertical className="h-3.5 w-3.5 text-slate-400 cursor-grab active:cursor-grabbing shrink-0" />
                                   <input
                                     type="text"
                                     value={item.name}
@@ -1113,11 +1196,23 @@ export default function App() {
                         return (
                           <div
                             key={item.id}
-                            className="group/row flex justify-between items-start hover:bg-blue-50/40 p-1.5 -mx-1.5 rounded-lg transition-all"
+                            className={`group/row flex justify-between items-start hover:bg-blue-50/40 p-1.5 -mx-1.5 rounded-lg transition-all duration-150 ${
+                              isEditMode && dragOverItemId === item.id ? "border-t-2 border-dashed border-[#0059bb] pt-4 mt-2" : ""
+                            }`}
+                            draggable={isEditMode}
+                            onDragStart={isEditMode ? (e) => handleDragStart(e, item.id, card.id) : undefined}
+                            onDragEnd={isEditMode ? handleDragEnd : undefined}
+                            onDragOver={isEditMode ? (e) => handleDragOverItem(e, item.id) : undefined}
+                            onDragLeave={isEditMode ? () => handleDragLeaveItem(item.id) : undefined}
+                            onDrop={isEditMode ? (e) => handleDropOnItem(e, item.id, card.id) : undefined}
                           >
-                            <div className="flex-1 min-w-0 pr-2">
+                            <div className="flex-1 min-w-0 pr-2 flex items-start gap-1.5">
+                              {isEditMode && (
+                                <Icons.GripVertical className="h-4 w-4 text-slate-400 cursor-grab active:cursor-grabbing mt-1 shrink-0 hover:text-[#0059bb] transition-colors" />
+                              )}
+                              
                               {isEditMode ? (
-                                <div className="space-y-1.5 p-1 bg-red-50/30 border border-red-100 rounded">
+                                <div className="space-y-1.5 p-1 bg-red-50/30 border border-red-100 rounded flex-1">
                                   {/* Edit Name */}
                                   <div className="flex justify-between items-center gap-1">
                                     <input
