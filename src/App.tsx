@@ -259,28 +259,43 @@ export default function App() {
   const [newPassword, setNewPassword] = useState<string>("");
   const [changePasswordError, setChangePasswordError] = useState<string>("");
 
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  const isEditModeRef = useRef(isEditMode);
+  useEffect(() => {
+    isEditModeRef.current = isEditMode;
+  }, [isEditMode]);
+
   // Load and subscribe from Firebase Firestore (and seed defaults on first boot if database is completely empty)
   useEffect(() => {
-    validateConnection();
-
-    // 1. Seed fallback default datasets to Firestore if they do not exist
+    // 1. Seed fallback default datasets to Firestore if they do not exist (in parallel, completely non-blocking)
     seedInitialDataIfEmpty(
       initialDirectoryCards,
       initialUnitColumns,
       initialCephasDirectoryCards
-    );
+    ).then(() => {
+      validateConnection();
+    });
 
     // 2. Subscribe to real-time sync of the four collections/documents
+    // We only apply server updates when the admin is NOT actively editing to avoid breaking their writing sessions
     const unsubscribeCards = subscribeToDoc("fundhas", initialDirectoryCards, (updatedCards) => {
-      setCards(updatedCards);
+      if (!isEditModeRef.current) {
+        setCards(updatedCards);
+      }
     });
 
     const unsubscribeUnits = subscribeToDoc("units", initialUnitColumns, (updatedUnits) => {
-      setUnitColumns(updatedUnits);
+      if (!isEditModeRef.current) {
+        setUnitColumns(updatedUnits);
+      }
     });
 
     const unsubscribeCephas = subscribeToDoc("cephas", initialCephasDirectoryCards, (updatedCephas) => {
-      setCephasCards(updatedCephas);
+      if (!isEditModeRef.current) {
+        setCephasCards(updatedCephas);
+      }
     });
 
     const unsubscribeSettings = subscribeToDoc("settings", "1234", (pass) => {
@@ -296,22 +311,53 @@ export default function App() {
   }, []);
 
   // Save updates helper
-  const handleSaveChanges = async (updatedCards: DirectoryCard[], updatedUnits: UnitColumn[]) => {
-    try {
-      await saveDirectoryDoc("fundhas", updatedCards);
-      await saveDirectoryDoc("units", updatedUnits);
-      triggerNotification("success", "Alterações salvas e sincronizadas com sucesso!");
-    } catch (e) {
-      triggerNotification("warn", "Erro ao salvar alterações na nuvem.");
+  const handleSaveChanges = async (updatedCards: DirectoryCard[], updatedUnits: UnitColumn[], forceSaveToCloud = false) => {
+    setCards(updatedCards);
+    setUnitColumns(updatedUnits);
+    
+    if (forceSaveToCloud) {
+      try {
+        await saveDirectoryDoc("fundhas", updatedCards);
+        await saveDirectoryDoc("units", updatedUnits);
+        setHasUnsavedChanges(false);
+        triggerNotification("success", "Alterações salvas e sincronizadas com sucesso!");
+      } catch (e) {
+        triggerNotification("warn", "Erro ao salvar alterações na nuvem.");
+      }
+    } else {
+      setHasUnsavedChanges(true);
     }
   };
 
-  const handleSaveCephasChanges = async (updatedCephasCards: DirectoryCard[]) => {
+  const handleSaveCephasChanges = async (updatedCephasCards: DirectoryCard[], forceSaveToCloud = false) => {
+    setCephasCards(updatedCephasCards);
+    
+    if (forceSaveToCloud) {
+      try {
+        await saveDirectoryDoc("cephas", updatedCephasCards);
+        setHasUnsavedChanges(false);
+        triggerNotification("success", "Alterações do CEPHAS salvas com sucesso!");
+      } catch (e) {
+        triggerNotification("warn", "Erro ao salvar alterações do CEPHAS na nuvem.");
+      }
+    } else {
+      setHasUnsavedChanges(true);
+    }
+  };
+
+  // Master save function to push all local state edits to Firestore at once
+  const saveAllModifications = async () => {
+    setIsSaving(true);
     try {
-      await saveDirectoryDoc("cephas", updatedCephasCards);
-      triggerNotification("success", "Alterações do CEPHAS salvas com sucesso!");
+      await saveDirectoryDoc("fundhas", cards);
+      await saveDirectoryDoc("units", unitColumns);
+      await saveDirectoryDoc("cephas", cephasCards);
+      setHasUnsavedChanges(false);
+      triggerNotification("success", "Dados validados e salvos na nuvem! Alterações sincronizadas com todos os dispositivos.");
     } catch (e) {
-      triggerNotification("warn", "Erro ao salvar alterações do CEPHAS na nuvem.");
+      triggerNotification("warn", "Erro ao salvar as alterações pendentes no banco de dados.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -672,18 +718,51 @@ export default function App() {
 
           {/* Right Action Buttons */}
           <div className="flex items-center gap-3">
+            {/* Dedicated Save Button when in Edit Mode */}
+            {isEditMode && (
+              <button
+                id="btn-salvar-alteracoes"
+                onClick={saveAllModifications}
+                disabled={isSaving}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all duration-300 shadow-sm cursor-pointer ${
+                  hasUnsavedChanges
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300 animate-pulse"
+                    : "bg-slate-700/60 text-slate-300 border border-slate-600 cursor-default font-medium"
+                }`}
+                title={hasUnsavedChanges ? "Clique para salvar suas alterações de forma definitiva para todos os navegadores e celulares" : "Todas as alterações já foram salvas com sucesso na nuvem"}
+              >
+                {isSaving ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <span>Salvando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    <span>{hasUnsavedChanges ? "Salvar Alterações" : "Salvo na Nuvem"}</span>
+                  </>
+                )}
+              </button>
+            )}
+
             {/* Quick Toggle Edit Mode */}
             <button
               id="edit-mode-toggle"
-              onClick={() => {
+              onClick={async () => {
                 if (!isEditMode) {
                   // Requisitar senha de 4 dígitos do administrador
                   setShowPasswordModal(true);
                   setInputPassword("");
                   setPasswordError("");
                 } else {
+                  if (hasUnsavedChanges) {
+                    await saveAllModifications();
+                  }
                   setIsEditMode(false);
-                  triggerNotification("success", "Modo de visualização restaurado.");
+                  triggerNotification("success", "Modo de visualização restaurado. Alterações salvas.");
                 }
               }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 shadow-sm cursor-pointer ${
@@ -722,6 +801,13 @@ export default function App() {
           {notification.type === "warn" && <AlertCircle className="h-4 w-4 text-red-600" />}
           {notification.type === "info" && <Info className="h-4 w-4 text-blue-600" />}
           <span>{notification.text}</span>
+        </div>
+      )}
+
+      {isEditMode && hasUnsavedChanges && (
+        <div className="bg-amber-500 text-white text-xs font-bold py-2 px-4 text-center flex items-center justify-center gap-2 no-print border-b border-amber-600">
+          <AlertCircle className="h-4 w-4 text-white shrink-0" />
+          <span>Você possui alterações locais não salvas! Clique no botão verde "Salvar Alterações" no topo para gravar no banco de dados para todos os celulares/computadores.</span>
         </div>
       )}
 

@@ -114,40 +114,34 @@ export async function saveDirectoryDoc(docId: string, list: DirectoryCard[] | Un
   }
 }
 
-// Seed the database with initial values if they do not exist
+// Seed the database with initial values in parallel if they do not exist
 export async function seedInitialDataIfEmpty(
   fallbackCards: DirectoryCard[],
   fallbackUnits: UnitColumn[],
   fallbackCephas: DirectoryCard[]
 ) {
   try {
-    const fundhasRef = doc(db, "directories", "fundhas");
-    const docSnap = await getDoc(fundhasRef);
-    if (!docSnap.exists()) {
-      console.log("Seeding initial Fundhas Directory cards to Firestore...");
-      await saveDirectoryDoc("fundhas", fallbackCards);
-    }
+    const checkDocs = [
+      { id: "fundhas", fallback: fallbackCards },
+      { id: "units", fallback: fallbackUnits },
+      { id: "cephas", fallback: fallbackCephas },
+      { id: "settings", fallback: "1234" }
+    ];
 
-    const unitsRef = doc(db, "directories", "units");
-    const unitsSnap = await getDoc(unitsRef);
-    if (!unitsSnap.exists()) {
-      console.log("Seeding initial Unit columns to Firestore...");
-      await saveDirectoryDoc("units", fallbackUnits);
-    }
-
-    const cephasRef = doc(db, "directories", "cephas");
-    const cephasSnap = await getDoc(cephasRef);
-    if (!cephasSnap.exists()) {
-      console.log("Seeding initial Cephas Directory cards to Firestore...");
-      await saveDirectoryDoc("cephas", fallbackCephas);
-    }
-
-    const settingsRef = doc(db, "directories", "settings");
-    const settingsSnap = await getDoc(settingsRef);
-    if (!settingsSnap.exists()) {
-      console.log("Seeding initial administrative password '1234' to Firestore...");
-      await saveDirectoryDoc("settings", "1234");
-    }
+    await Promise.all(
+      checkDocs.map(async (item) => {
+        try {
+          const docRef = doc(db, "directories", item.id);
+          const docSnap = await getDoc(docRef);
+          if (!docSnap.exists()) {
+            console.log(`Seeding initial data for ${item.id}...`);
+            await saveDirectoryDoc(item.id, item.fallback);
+          }
+        } catch (err) {
+          console.warn(`Could not check or seed ${item.id}:`, err);
+        }
+      })
+    );
   } catch (e) {
     console.error("Failed to seed initial data:", e);
   }
