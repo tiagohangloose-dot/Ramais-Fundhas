@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    // Core directory configurations
+    match /directories/{docId} {
+      allow read: if true;
+      allow write: if docId in ['fundhas', 'cephas', 'units', 'settings']
+        && (
+          (docId == 'settings' && request.resource.data.password is string && request.resource.data.password.size() >= 4 && request.resource.data.password.size() <= 10)
+          || (docId != 'settings' && request.resource.data.list is list)
+        );
+    }
+  }
+}

@@ -31,6 +31,12 @@ import {
 import * as Icons from "lucide-react";
 import { DirectoryCard, DirectoryItem, UnitColumn, UnitDetail, UnitSubGroup } from "./types";
 import { initialDirectoryCards, initialUnitColumns, initialCephasDirectoryCards } from "./data";
+import {
+  subscribeToDoc,
+  saveDirectoryDoc,
+  seedInitialDataIfEmpty,
+  validateConnection
+} from "./firebase";
 
 // Helper to render Lucide Icons dynamically
 function DynamicIcon({ name, className = "h-5 w-5" }: { name: string; className?: string }) {
@@ -104,6 +110,7 @@ export default function App() {
   const [cephasCards, setCephasCards] = useState<DirectoryCard[]>([]);
   const [activeMainTab, setActiveMainTab] = useState<"fundhas" | "cephas">("fundhas");
   const [selectedCephasCategory, setSelectedCephasCategory] = useState<string>("todos");
+  const [systemPassword, setSystemPassword] = useState<string>("1234");
 
   // Editing state
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
@@ -252,63 +259,59 @@ export default function App() {
   const [newPassword, setNewPassword] = useState<string>("");
   const [changePasswordError, setChangePasswordError] = useState<string>("");
 
-  // Load from local storage or fallback to defaults
+  // Load and subscribe from Firebase Firestore (and seed defaults on first boot if database is completely empty)
   useEffect(() => {
-    try {
-      // Garantir que a senha de edição administrativa padrão '1234' exista no início
-      if (!localStorage.getItem("fundhas_edit_password")) {
-        localStorage.setItem("fundhas_edit_password", "1234");
-      }
+    validateConnection();
 
-      const savedCards = localStorage.getItem("fundhas_directory_cards");
-      const savedUnits = localStorage.getItem("fundhas_unit_columns");
-      const savedCephas = localStorage.getItem("fundhas_cephas_cards");
+    // 1. Seed fallback default datasets to Firestore if they do not exist
+    seedInitialDataIfEmpty(
+      initialDirectoryCards,
+      initialUnitColumns,
+      initialCephasDirectoryCards
+    );
 
-      if (savedCards) {
-        setCards(JSON.parse(savedCards));
-      } else {
-        setCards(initialDirectoryCards);
-      }
+    // 2. Subscribe to real-time sync of the four collections/documents
+    const unsubscribeCards = subscribeToDoc("fundhas", initialDirectoryCards, (updatedCards) => {
+      setCards(updatedCards);
+    });
 
-      if (savedUnits) {
-        setUnitColumns(JSON.parse(savedUnits));
-      } else {
-        setUnitColumns(initialUnitColumns);
-      }
+    const unsubscribeUnits = subscribeToDoc("units", initialUnitColumns, (updatedUnits) => {
+      setUnitColumns(updatedUnits);
+    });
 
-      if (savedCephas) {
-        setCephasCards(JSON.parse(savedCephas));
-      } else {
-        setCephasCards(initialCephasDirectoryCards);
-      }
-    } catch (e) {
-      console.error("Erro ao carregar dados do LocalStorage", e);
-      setCards(initialDirectoryCards);
-      setUnitColumns(initialUnitColumns);
-      setCephasCards(initialCephasDirectoryCards);
-    }
+    const unsubscribeCephas = subscribeToDoc("cephas", initialCephasDirectoryCards, (updatedCephas) => {
+      setCephasCards(updatedCephas);
+    });
+
+    const unsubscribeSettings = subscribeToDoc("settings", "1234", (pass) => {
+      setSystemPassword(pass);
+    });
+
+    return () => {
+      unsubscribeCards();
+      unsubscribeUnits();
+      unsubscribeCephas();
+      unsubscribeSettings();
+    };
   }, []);
 
   // Save updates helper
-  const handleSaveChanges = (updatedCards: DirectoryCard[], updatedUnits: UnitColumn[]) => {
+  const handleSaveChanges = async (updatedCards: DirectoryCard[], updatedUnits: UnitColumn[]) => {
     try {
-      localStorage.setItem("fundhas_directory_cards", JSON.stringify(updatedCards));
-      localStorage.setItem("fundhas_unit_columns", JSON.stringify(updatedUnits));
-      setCards(updatedCards);
-      setUnitColumns(updatedUnits);
+      await saveDirectoryDoc("fundhas", updatedCards);
+      await saveDirectoryDoc("units", updatedUnits);
       triggerNotification("success", "Alterações salvas e sincronizadas com sucesso!");
     } catch (e) {
-      triggerNotification("warn", "Erro ao salvar alterações no navegador.");
+      triggerNotification("warn", "Erro ao salvar alterações na nuvem.");
     }
   };
 
-  const handleSaveCephasChanges = (updatedCephasCards: DirectoryCard[]) => {
+  const handleSaveCephasChanges = async (updatedCephasCards: DirectoryCard[]) => {
     try {
-      localStorage.setItem("fundhas_cephas_cards", JSON.stringify(updatedCephasCards));
-      setCephasCards(updatedCephasCards);
+      await saveDirectoryDoc("cephas", updatedCephasCards);
       triggerNotification("success", "Alterações do CEPHAS salvas com sucesso!");
     } catch (e) {
-      triggerNotification("warn", "Erro ao salvar alterações do CEPHAS no navegador.");
+      triggerNotification("warn", "Erro ao salvar alterações do CEPHAS na nuvem.");
     }
   };
 
@@ -317,17 +320,19 @@ export default function App() {
     setShowResetConfirm(true);
   };
 
-  const confirmResetToDefaults = () => {
-    localStorage.removeItem("fundhas_directory_cards");
-    localStorage.removeItem("fundhas_unit_columns");
-    localStorage.removeItem("fundhas_cephas_cards");
-    localStorage.removeItem("fundhas_edit_password");
-    setCards(initialDirectoryCards);
-    setUnitColumns(initialUnitColumns);
-    setCephasCards(initialCephasDirectoryCards);
-    setShowResetConfirm(false);
-    setIsEditMode(false);
-    triggerNotification("info", "Dados restaurados para a versão padrão de fábrica e senha de administração resetada para '1234'.");
+  const confirmResetToDefaults = async () => {
+    try {
+      await saveDirectoryDoc("fundhas", initialDirectoryCards);
+      await saveDirectoryDoc("units", initialUnitColumns);
+      await saveDirectoryDoc("cephas", initialCephasDirectoryCards);
+      await saveDirectoryDoc("settings", "1234");
+      
+      setShowResetConfirm(false);
+      setIsEditMode(false);
+      triggerNotification("info", "Dados restaurados para a versão padrão de fábrica e senha de administração resetada para '1234'.");
+    } catch (e) {
+      triggerNotification("warn", "Erro ao restaurar dados na nuvem.");
+    }
   };
 
   // Helper for notification timers
@@ -1096,7 +1101,7 @@ export default function App() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-12 print-grid">
+          <div className={`grid grid-cols-1 md:grid-cols-2 ${activeMainTab === "cephas" ? "lg:grid-cols-2 xl:grid-cols-3" : "lg:grid-cols-3 xl:grid-cols-4"} gap-6 mb-12 print-grid`}>
             
             {getFilteredCards().map((card) => {
               // Filter out items inside the card based on search query
@@ -1685,7 +1690,6 @@ export default function App() {
 
             <form onSubmit={(e) => {
               e.preventDefault();
-              const systemPassword = localStorage.getItem("fundhas_edit_password") || "1234";
               if (inputPassword === systemPassword) {
                 setIsEditMode(true);
                 setShowPasswordModal(false);
@@ -1734,7 +1738,6 @@ export default function App() {
                     
                     // Auto-submit check when 4 digits are completed
                     if (val.length === 4) {
-                      const systemPassword = localStorage.getItem("fundhas_edit_password") || "1234";
                       if (val === systemPassword) {
                         setIsEditMode(true);
                         setShowPasswordModal(false);
@@ -1809,14 +1812,18 @@ export default function App() {
               <p className="text-xs text-slate-500 mt-1">Configure uma nova senha numérica para o Modo Edição.</p>
             </div>
 
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               if (/^\d{4}$/.test(newPassword)) {
-                localStorage.setItem("fundhas_edit_password", newPassword);
-                setShowChangePasswordModal(false);
-                setNewPassword("");
-                setChangePasswordError("");
-                triggerNotification("success", `Senha administrativa alterada com êxito! Nova senha definida.`);
+                try {
+                  await saveDirectoryDoc("settings", newPassword);
+                  setShowChangePasswordModal(false);
+                  setNewPassword("");
+                  setChangePasswordError("");
+                  triggerNotification("success", `Senha administrativa alterada com êxito! Nova senha definida na nuvem.`);
+                } catch (e) {
+                  setChangePasswordError("Erro ao salvar senha de administrador na nuvem.");
+                }
               } else {
                 setChangePasswordError("A senha precisa conter exatamente 4 algarismos numéricos!");
               }

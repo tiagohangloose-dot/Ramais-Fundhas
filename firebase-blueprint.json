@@ -1,0 +1,34 @@
+{
+  "entities": {
+    "DirectoryDoc": {
+      "title": "DirectoryDoc",
+      "description": "Contains a list of DirectoryCard elements or UnitColumn elements depending on docId.",
+      "type": "object",
+      "properties": {
+        "list": {
+          "type": "array",
+          "description": "List of directories or units"
+        }
+      },
+      "required": ["list"]
+    },
+    "SettingsDoc": {
+      "title": "SettingsDoc",
+      "description": "Application settings including the 4-digit administrative password.",
+      "type": "object",
+      "properties": {
+        "password": {
+          "type": "string",
+          "description": "The password used to authorize Edit Mode"
+        }
+      },
+      "required": ["password"]
+    }
+  },
+  "firestore": {
+    "/directories": {
+      "schema": "DirectoryDoc",
+      "description": "Holds the active directory configurations of cards, cephas, units, and system settings."
+    }
+  }
+}
