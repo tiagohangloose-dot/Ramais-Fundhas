@@ -1,0 +1,6 @@
+{
+  "name": "Diretório de Ramais Fundhas",
+  "description": "Diretório institucional de ramais, diretorias, divisões e unidades da Fundação Hélio Augusto de Souza (Fundhas).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
