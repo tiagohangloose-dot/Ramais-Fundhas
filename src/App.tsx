@@ -14,7 +14,6 @@ import {
   Trash2,
   Edit2,
   Save,
-  RotateCcw,
   Printer,
   Info,
   X,
@@ -251,7 +250,6 @@ export default function App() {
   
   // Custom dialog confirmations instead of window.confirm
   const [cardIdToDelete, setCardIdToDelete] = useState<string | null>(null);
-  const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   
   // Custom Change Password state
@@ -361,26 +359,6 @@ export default function App() {
     }
   };
 
-  // Reset helper triggers confirmation modal
-  const handleResetToDefaults = () => {
-    setShowResetConfirm(true);
-  };
-
-  const confirmResetToDefaults = async () => {
-    try {
-      await saveDirectoryDoc("fundhas", initialDirectoryCards);
-      await saveDirectoryDoc("units", initialUnitColumns);
-      await saveDirectoryDoc("cephas", initialCephasDirectoryCards);
-      await saveDirectoryDoc("settings", "1234");
-      
-      setShowResetConfirm(false);
-      setIsEditMode(false);
-      triggerNotification("info", "Dados restaurados para a versão padrão de fábrica e senha de administração resetada para '1234'.");
-    } catch (e) {
-      triggerNotification("warn", "Erro ao restaurar dados na nuvem.");
-    }
-  };
-
   // Helper for notification timers
   const triggerNotification = (type: "success" | "info" | "warn", text: string) => {
     setNotification({ type, text });
@@ -457,6 +435,34 @@ export default function App() {
         (item.role && removeAccents(item.role).toLowerCase().includes(term)) ||
         (item.extension && removeAccents(item.extension).toLowerCase().includes(term))
     );
+  };
+
+  const hasAnyUnitMatch = () => {
+    if (!searchQuery.trim()) return true;
+    const query = removeAccents(searchQuery).toLowerCase();
+    return unitColumns.some(col => 
+      col.sections.some(sec => 
+        sec.groups.some(grp => 
+          removeAccents(grp.name).toLowerCase().includes(query) ||
+          (grp.directExtension && removeAccents(grp.directExtension).toLowerCase().includes(query)) ||
+          grp.items.some(item => 
+            removeAccents(item.name).toLowerCase().includes(query) ||
+            (item.role && removeAccents(item.role).toLowerCase().includes(query)) ||
+            removeAccents(item.extension).toLowerCase().includes(query)
+          )
+        )
+      )
+    );
+  };
+
+  const isSearchEmpty = () => {
+    if (getFilteredCards().length > 0) return false;
+    
+    if (activeMainTab === "fundhas" && (selectedCategory === "todos" || selectedCategory === "unidades")) {
+      return !hasAnyUnitMatch();
+    }
+    
+    return true;
   };
 
   // Update specific item properties (inline edit)
@@ -1059,17 +1065,6 @@ export default function App() {
             >
               Programa Aprendiz & Polos (Opção 2)
             </button>
-
-            {/* If edits were made, show fallback reset button */}
-            <div className="ml-auto">
-              <button
-                onClick={handleResetToDefaults}
-                className="text-xs text-slate-500 hover:text-red-600 flex items-center gap-1 px-2.5 py-1.5 rounded-md hover:bg-red-50 hover:border-red-100 border border-transparent transition-all font-medium cursor-pointer"
-                title="Restaurar dados originais"
-              >
-                <RotateCcw className="h-3 w-3" /> Restaurar Padrões
-              </button>
-            </div>
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-2 mb-8 no-print border-b border-slate-200 pb-4">
@@ -1146,17 +1141,6 @@ export default function App() {
             >
               Telefones Externos
             </button>
-
-            {/* If edits were made, show fallback reset button */}
-            <div className="ml-auto">
-              <button
-                onClick={handleResetToDefaults}
-                className="text-xs text-slate-500 hover:text-red-600 flex items-center gap-1 px-2.5 py-1.5 rounded-md hover:bg-red-50 hover:border-red-100 border border-transparent transition-all font-medium cursor-pointer"
-                title="Restaurar dados originais"
-              >
-                <RotateCcw className="h-3 w-3" /> Restaurar Padrões
-              </button>
-            </div>
           </div>
         )}
 
@@ -1194,7 +1178,7 @@ export default function App() {
         )}
 
         {/* 4. MAIN BENTO GRID ARCHITECTURE (TOP DIRECTORY CARDS) */}
-        {getFilteredCards().length === 0 && (activeMainTab === "cephas" || selectedCategory !== "unidades") ? (
+        {isSearchEmpty() ? (
           <div className="bg-white border border-[#DEE2E6] rounded-2xl py-12 px-4 text-center shadow-sm mb-12">
             <Search className="h-10 w-10 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-800 font-bold mb-1">Nenhum ramal ou colaborador encontrado</p>
@@ -1992,45 +1976,6 @@ export default function App() {
       )}
 
 
-
-      {/* 11. MODAL: SYSTEM DATA FACTORY RESET CONFIRM */}
-      {showResetConfirm && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 no-print animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-150 max-w-sm w-full overflow-hidden transform transition-all p-6 relative">
-            <button 
-              onClick={() => setShowResetConfirm(false)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 transition-all cursor-pointer"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div className="text-center mt-2 mb-6">
-              <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3 animate-pulse">
-                <RotateCcw className="h-6 w-6" />
-              </div>
-              <h4 className="text-md font-extrabold text-[#001937]">Restaurar Banco de Dados</h4>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Isso irá redefinir e resetar totalmente o diretório de ramais no navegador, apagando novos cards, alterações de cargos e nomes, sobrepondo para as configurações padrão originais de fábrica.
-              </p>
-            </div>
-
-            <div className="pt-2 flex gap-2">
-              <button
-                onClick={() => setShowResetConfirm(false)}
-                className="flex-1 py-2.5 px-4 border border-slate-200 text-slate-500 rounded-xl hover:bg-slate-50 transition-all text-xs font-bold cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmResetToDefaults}
-                className="flex-1 py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-all text-xs font-bold shadow-sm cursor-pointer"
-              >
-                Restaurar Padrão
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
