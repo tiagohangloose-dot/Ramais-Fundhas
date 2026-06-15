@@ -644,6 +644,37 @@ export default function App() {
     handleSaveChanges(cards, updated);
   };
 
+  const handleUpdateGroupName = (colIdx: number, secIdx: number, grpIdx: number, name: string) => {
+    const updated = [...unitColumns];
+    const group = updated[colIdx].sections[secIdx].groups[grpIdx];
+    if (group) {
+      group.name = name;
+      handleSaveChanges(cards, updated);
+    }
+  };
+
+  const handleAddUnitGroup = (colIdx: number, secIdx: number) => {
+    const updated = [...unitColumns];
+    const section = updated[colIdx].sections[secIdx];
+    if (section) {
+      const newGroupId = `grp-custom-${Date.now()}`;
+      section.groups.push({
+        id: newGroupId,
+        name: "Nova Unidade",
+        items: [
+          { name: "Gestor(a)", role: "Gestor", extension: "0000-0000" }
+        ]
+      });
+      handleSaveChanges(cards, updated);
+    }
+  };
+
+  const handleDeleteUnitGroup = (colIdx: number, secIdx: number, grpIdx: number) => {
+    const updated = [...unitColumns];
+    updated[colIdx].sections[secIdx].groups.splice(grpIdx, 1);
+    handleSaveChanges(cards, updated);
+  };
+
   // Filter categorization rules
   const getFilteredCards = () => {
     if (activeMainTab === "cephas") {
@@ -1586,9 +1617,28 @@ export default function App() {
                               <div key={grp.id} className="bg-slate-50/45 p-3 rounded-xl border border-slate-100 hover:bg-slate-50 transition-all">
                                 
                                 <div className="flex justify-between items-center gap-2 mb-2">
-                                  <span className="text-xs font-bold text-[#001937]">
-                                    {grp.name}
-                                  </span>
+                                  {isEditMode ? (
+                                    <div className="flex items-center gap-2 w-full">
+                                      <input
+                                        type="text"
+                                        value={grp.name}
+                                        onChange={(e) => handleUpdateGroupName(colIdx, secIdx, grpIdx, e.target.value)}
+                                        className="text-xs font-bold text-[#001937] bg-white border border-slate-200 rounded px-1.5 py-0.5 w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                        placeholder="Nome da Unidade"
+                                      />
+                                      <button
+                                        onClick={() => handleDeleteUnitGroup(colIdx, secIdx, grpIdx)}
+                                        className="p-1 text-red-500 hover:bg-red-50 rounded shrink-0 duration-150"
+                                        title="Excluir Unidade"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs font-bold text-[#001937]">
+                                      {highlightMatch(grp.name, searchQuery)}
+                                    </span>
+                                  )}
 
                                   {/* Handle Direct Extension without children (e.g. Padaria-Escola - 596) */}
                                   {grp.directExtension !== undefined && (
@@ -1714,6 +1764,15 @@ export default function App() {
 
                               </div>
                             ))}
+
+                            {isEditMode && (
+                              <button
+                                onClick={() => handleAddUnitGroup(colIdx, secIdx)}
+                                className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-[#0059bb] font-bold text-xs rounded-xl border border-blue-150 flex items-center justify-center gap-1.5 duration-100"
+                              >
+                                <Plus className="h-3.5 w-3.5" /> Adicionar Unidade nesta Região
+                              </button>
+                            )}
                           </div>
 
                         </div>

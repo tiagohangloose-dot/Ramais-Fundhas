@@ -376,6 +376,14 @@ export const initialUnitColumns: UnitColumn[] = [
             items: [
               { name: "Friggi", role: "Gestor", extension: "3902-7508" }
             ]
+          },
+          {
+            id: "grp-eugenio-melo",
+            name: "Eugênio de Melo",
+            items: [
+              { name: "Gestor(a)", role: "Gestor", extension: "0000" },
+              { name: "Administrativo", role: "Adm", extension: "0000" }
+            ]
           }
         ]
       }
