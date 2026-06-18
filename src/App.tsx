@@ -378,36 +378,44 @@ export default function App() {
     }, 2500);
   };
 
-  const removeAccents = (str: string): string => {
-    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const removeAccents = (val: any): string => {
+    if (val === null || val === undefined) return "";
+    const str = String(val);
+    try {
+      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    } catch (e) {
+      return str;
+    }
   };
 
   // Search logic helper: filters items or returns boolean
-  const highlightMatch = (text: string, search: string) => {
-    if (!search.trim()) return <span>{text}</span>;
+  const highlightMatch = (text: any, search: string) => {
+    const strText = text ? String(text) : "";
+    if (!strText) return <span></span>;
+    if (!search || !search.trim()) return <span>{strText}</span>;
     
-    const normalizedText = removeAccents(text).toLowerCase();
+    const normalizedText = removeAccents(strText).toLowerCase();
     const normalizedSearch = removeAccents(search).toLowerCase();
     
-    if (!normalizedText.includes(normalizedSearch)) {
-      return <span>{text}</span>;
+    if (!normalizedSearch || !normalizedText.includes(normalizedSearch)) {
+      return <span>{strText}</span>;
     }
     
     const parts: React.ReactNode[] = [];
     let currentIndex = 0;
     
-    while (currentIndex < text.length) {
+    while (currentIndex < strText.length) {
       const matchIndex = normalizedText.indexOf(normalizedSearch, currentIndex);
       if (matchIndex === -1) {
-        parts.push(text.substring(currentIndex));
+        parts.push(strText.substring(currentIndex));
         break;
       }
       
       if (matchIndex > currentIndex) {
-        parts.push(text.substring(currentIndex, matchIndex));
+        parts.push(strText.substring(currentIndex, matchIndex));
       }
       
-      const originalMatchedText = text.substring(matchIndex, matchIndex + normalizedSearch.length);
+      const originalMatchedText = strText.substring(matchIndex, matchIndex + normalizedSearch.length);
       parts.push(
         <mark key={matchIndex} className="bg-amber-100 text-amber-950 font-medium px-0.5 rounded-sm">
           {originalMatchedText}
@@ -415,6 +423,11 @@ export default function App() {
       );
       
       currentIndex = matchIndex + normalizedSearch.length;
+      
+      // Infinite loop guard
+      if (normalizedSearch.length === 0 || currentIndex <= matchIndex) {
+        break;
+      }
     }
     
     return <span>{parts}</span>;
