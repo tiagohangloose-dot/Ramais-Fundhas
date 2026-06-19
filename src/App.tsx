@@ -25,7 +25,8 @@ import {
   Home,
   CheckCircle,
   HelpCircle,
-  AlertCircle
+  AlertCircle,
+  Monitor
 } from "lucide-react";
 import * as Icons from "lucide-react";
 import { DirectoryCard, DirectoryItem, UnitColumn, UnitDetail, UnitSubGroup } from "./types";
@@ -47,7 +48,7 @@ function DynamicIcon({ name, className = "h-5 w-5" }: { name: string; className?
 }
 
 // Helper to parse and format phone extensions/numbers for display & dialing
-export function getPhoneDisplayAndDial(ext: string, isCephas: boolean) {
+export function getPhoneDisplayAndDial(ext: string, isCephas: boolean, voipMode: boolean = false) {
   if (!ext) return [];
 
   const parts = ext.split("/").map(p => p.trim());
@@ -70,7 +71,7 @@ export function getPhoneDisplayAndDial(ext: string, isCephas: boolean) {
       if (digits.length === 3) {
         return {
           display: `3932-0${digits}`,
-          dialUrl: `tel:39320${digits}`,
+          dialUrl: voipMode ? `tel:${digits}` : `tel:39320${digits}`,
           raw: `3932-0${digits}`
         };
       }
@@ -89,7 +90,7 @@ export function getPhoneDisplayAndDial(ext: string, isCephas: boolean) {
     if (digits.length === 3) {
       return {
         display: part, // Keep it short, e.g., "583"
-        dialUrl: `tel:39320${digits}`, // But dials full number
+        dialUrl: voipMode ? `tel:${digits}` : `tel:39320${digits}`, // Dials short if voipMode is active, otherwise full number
         raw: `3932-0${digits}` // when copied, copies full number
       };
     }
@@ -110,6 +111,25 @@ export default function App() {
   const [activeMainTab, setActiveMainTab] = useState<"fundhas" | "cephas">("fundhas");
   const [selectedCephasCategory, setSelectedCephasCategory] = useState<string>("todos");
   const [systemPassword, setSystemPassword] = useState<string>("1234");
+
+  // VoIP direct dial mode
+  const [voipMode, setVoipMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("voipMode") === "true";
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const toggleVoipMode = () => {
+    setVoipMode(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem("voipMode", String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   // Editing state
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
@@ -768,8 +788,8 @@ export default function App() {
               <Home className="h-4 w-4" /> Início
             </button>
             <button 
-              onClick={() => setSelectedCategory("daf")} 
-              className={`hover:text-white transition-colors py-1 px-2.5 rounded-md ${selectedCategory === "daf" ? "bg-white/10 text-white font-semibold" : ""}`}
+              onClick={() => { setActiveMainTab("fundhas"); setSelectedCategory("diretorias"); }} 
+              className={`hover:text-white transition-colors py-1 px-2.5 rounded-md ${selectedCategory === "diretorias" ? "bg-white/10 text-white font-semibold" : ""}`}
             >
               Diretorias
             </button>
@@ -819,6 +839,26 @@ export default function App() {
                 )}
               </button>
             )}
+
+            {/* VoIP Mode Switch */}
+            <button
+              id="voip-mode-toggle"
+              onClick={toggleVoipMode}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs sm:text-sm font-semibold transition-all duration-300 shadow-sm cursor-pointer print:hidden ${
+                voipMode
+                  ? "bg-amber-500/20 border-amber-500/50 text-amber-300 ring-2 ring-amber-500/20"
+                  : "bg-slate-800/60 hover:bg-slate-700/60 border-slate-700 text-slate-300"
+              }`}
+              title={
+                voipMode
+                  ? "Modo VoIP Ativo: Ao clicar nos ramais de 3 dígitos, disca apenas o ramal curto (ex: 583). Clique para mudar para o Modo Padrão."
+                  : "Modo VoIP Desativado: Ao clicar, disca o número completo com prefixo (ex: 3932-0583). Ideal para celular. Clique para ativar Modo VoIP."
+              }
+            >
+              <Monitor className={`h-4 w-4 ${voipMode ? "text-amber-400" : "text-slate-400"}`} />
+              <span className="hidden sm:inline">{voipMode ? "Modo VoIP Ativo" : "Modo VoIP / PC"}</span>
+              <span className="sm:hidden">{voipMode ? "VoIP Ativo" : "VoIP / PC"}</span>
+            </button>
 
             {/* Quick Toggle Edit Mode */}
             <button
@@ -1124,6 +1164,16 @@ export default function App() {
               }`}
             >
               Todos os Ramais
+            </button>
+            <button
+              onClick={() => setSelectedCategory("diretorias")}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                selectedCategory === "diretorias"
+                  ? "bg-[#002D5C] text-white"
+                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+              }`}
+            >
+              Diretorias (Todas)
             </button>
             <button
               onClick={() => setSelectedCategory("presidencia")}
@@ -1503,7 +1553,7 @@ export default function App() {
                               ) : (
                                 (() => {
                                   if (!item.extension) return null;
-                                  const phones = getPhoneDisplayAndDial(item.extension, activeMainTab === "cephas");
+                                  const phones = getPhoneDisplayAndDial(item.extension, activeMainTab === "cephas", voipMode);
                                   if (!phones || phones.length === 0) return null;
 
                                   return (
@@ -1665,7 +1715,7 @@ export default function App() {
                                         />
                                       ) : (
                                         (() => {
-                                          const phones = getPhoneDisplayAndDial(grp.directExtension || "", false);
+                                          const phones = getPhoneDisplayAndDial(grp.directExtension || "", false, voipMode);
                                           if (!phones || phones.length === 0) return null;
                                           return (
                                             <div className="flex gap-1">
@@ -1739,7 +1789,7 @@ export default function App() {
                                             </div>
                                           ) : (
                                             (() => {
-                                              const phones = getPhoneDisplayAndDial(item.extension, false);
+                                              const phones = getPhoneDisplayAndDial(item.extension, false, voipMode);
                                               if (!phones || phones.length === 0) return null;
                                               return (
                                                 <div className="flex gap-1 justify-end">
