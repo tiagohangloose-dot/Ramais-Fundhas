@@ -65,14 +65,15 @@ export function getPhoneDisplayAndDial(ext: string, isCephas: boolean, voipMode:
       }];
     }
 
-    // Otherwise, convert any 3-digit number to standard complete format (3932-0xxx)
+    // Otherwise, do not convert 3-digit numbers to standard complete format (3932-0xxx) for Cephas.
+    // Keep them exactly as entered in the card.
     return parts.map(part => {
       const digits = part.replace(/\D/g, "");
       if (digits.length === 3) {
         return {
-          display: `3932-0${digits}`,
-          dialUrl: voipMode ? `tel:${digits}` : `tel:39320${digits}`,
-          raw: `3932-0${digits}`
+          display: part, // Use the actual short extension as typed (e.g., "207")
+          dialUrl: `tel:${digits}`, // Dial the short extension directly
+          raw: part
         };
       }
       const dialDigits = part.replace(/[^0-9+]/g, "");
